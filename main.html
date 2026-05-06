@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>家計簿アプリ</title>
+    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        #calendar {
+            max-width: 900px;
+            margin: 20px auto;
+            z-index: 1;
+        }
+
+        #inputModal {
+            position: fixed;
+            top: 20%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #eee;
+            padding: 20px;
+            z-index: 9999;
+        }
+
+        #list,
+        #categoryChart,
+        #monthlySummary {
+            position: relative;
+            z-index: 1;
+        }
+    </style>
+    <style>
+        #categoryChart {
+            width: 100%;
+            max-width: 400px;
+            height: 300px !important;
+            margin: 20px auto;
+            display: block;
+        }
+    </style>
+
+
+</head>
+
+<body>
+    <h1>家計簿アプリ</h1>
+
+
+    <div id="monthlySummary"></div>
+    <div id="calendar"></div>
+    <canvas id="categoryChart"></canvas>
+
+
+    <!-- モーダル -->
+    <div id="inputModal" style="display:none; background:#eee; padding:20px;">
+        <h3 id="selectedDate"></h3>
+
+        <select id="category">
+            <option>食費</option>
+            <option>交通費</option>
+            <option>日用品</option>
+            <option>美容</option>
+            <option>収入</option>
+        </select>
+
+        <input id="modalAmount" type="number" placeholder="金額">
+        <input id="modalMemo" type="text" placeholder="メモ">
+
+        <button onclick="saveItem()">保存</button>
+        <button onclick="document.getElementById('inputModal').style.display='none'">閉じる</button>
+    </div>
+
+    <script>
+        let chart;
+
+        function updateCategoryChart(data) {
+            const categoryTotals = {};
+
+            data.forEach(item => {
+                if (item.category !== "収入") {
+                    if (!categoryTotals[item.category]) {
+                        categoryTotals[item.category] = 0;
+                    }
+                    categoryTotals[item.category] += Number(item.amount);
+                }
+            });
+
+            const labels = Object.keys(categoryTotals);
+            const values = Object.values(categoryTotals);
+
+            console.log(labels, values);
+
+            const ctx = document.getElementById('categoryChart').getContext('2d');
+
+            if (chart) chart.destroy();
+
+            chart = new Chart(ctx, {
+                type: 'pie',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: values
+                    }]
+                }
+            });
+        }        /* モーダルを開く */
+        function openInputModal(date) {
+            document.getElementById("selectedDate").innerText = date;
+            document.getElementById("inputModal").style.display = "block";
+        }
+        function updateMonthlySummary(data, year, month) {
+            let income = 0;
+            let expense = 0;
+
+            data.forEach(item => {
+                const d = new Date(item.date);
+
+                if (d.getFullYear() === year && d.getMonth() === month) {
+                    if (item.category === "収入") {
+                        income += item.amount;
+                    } else {
+                        expense += item.amount;
+                    }
+                }
+            });
+
+            const balance = income - expense;
+
+            document.getElementById("monthlySummary").innerHTML = `
+    <p>${year}年 ${month + 1}月</p>
+    <p>収入：${income} 円</p>
+    <p>支出：${expense} 円</p>
+    <p>差額：${balance} 円</p>
+  `;
+        }
+        /* モーダルから保存 */
+        async function saveItem() {
+            const data = {
+                date: document.getElementById("selectedDate").innerText,
+                category: document.getElementById("category").value,
+                amount: Number(document.getElementById("modalAmount").value),
+                memo: document.getElementById("modalMemo").value
+            };
+
+            await fetch("http://127.0.0.1:8000/add", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(data)
+            });
+
+            document.getElementById("inputModal").style.display = "none";
+            loadList();
+            calendar.refetchEvents();
+        }
+
+        /* 上のフォームから追加 */
+        async function addItem() {
+            const data = {
+                date: document.getElementById("date").value,
+                category: document.getElementById("categoryInput").value,
+                amount: Number(document.getElementById("amountInput").value),
+                memo: document.getElementById("memoInput").value
+            };
+
+            await fetch("http://127.0.0.1:8000/add", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(data)
+            });
+
+            loadList();
+            calendar.refetchEvents();
+        }
+
+        /* 一覧読み込み */
+        async function loadList() {
+            const res = await fetch("http://127.0.0.1:8000/list");
+            const json = await res.json();
+
+            // 👇ここに追加！
+            const now = new Date();
+            updateCategoryChart(json.data, now.getFullYear(), now.getMonth());
+
+            const listDiv = document.getElementById("list");
+            listDiv.innerHTML = "";
+
+            json.data.forEach(item => {
+                listDiv.innerHTML += `<p>${item.date} / ${item.category} / ${item.amount}円 / ${item.memo}</p>`;
+            });
+        }
+        /* カレンダー初期化 */
+        let calendar;
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const calendarEl = document.getElementById('calendar');
+
+            calendar = new FullCalendar.Calendar(calendarEl, {
+                initialView: 'dayGridMonth',
+                datesSet: async function (info) {
+                    const res = await fetch("http://127.0.0.1:8000/list");
+                    const json = await res.json();
+
+                    const currentDate = info.view.currentStart;
+                    const year = currentDate.getFullYear();
+                    const month = currentDate.getMonth();
+
+                    updateMonthlySummary(json.data, year, month);
+                    updateCategoryChart(json.data, year, month);
+                },
+                dateClick: function (info) {
+                    openInputModal(info.dateStr);
+                },
+                events: async function (info, successCallback) {
+                    const res = await fetch("http://127.0.0.1:8000/list");
+                    const json = await res.json();
+
+                    const events = json.data.map(item => ({
+                        title: `${item.category} ¥${item.amount}`,
+                        start: item.date
+                    }));
+
+                    successCallback(events);
+                }
+            });
+
+            calendar.render();
+            loadList();
+        });
+    </script>
+
+</body>
+
+</html>
