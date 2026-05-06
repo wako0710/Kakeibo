@@ -176,7 +176,7 @@
 
         /* 一覧読み込み */
         async function loadList() {
-            const res = await fetch("http://127.0.0.1:8000/list");
+            const res = await fetch("https://kakeibo-y5uw.onrender.com");
             const json = await res.json();
 
             // 👇ここに追加！
@@ -199,7 +199,7 @@
             calendar = new FullCalendar.Calendar(calendarEl, {
                 initialView: 'dayGridMonth',
                 datesSet: async function (info) {
-                    const res = await fetch("http://127.0.0.1:8000/list");
+                    const res = await fetch("https://kakeibo-y5uw.onrender.com");
                     const json = await res.json();
 
                     const currentDate = info.view.currentStart;
@@ -213,7 +213,7 @@
                     openInputModal(info.dateStr);
                 },
                 events: async function (info, successCallback) {
-                    const res = await fetch("http://127.0.0.1:8000/list");
+                    const res = await fetch("https://kakeibo-y5uw.onrender.com");
                     const json = await res.json();
 
                     const events = json.data.map(item => ({
