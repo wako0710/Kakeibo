@@ -51,6 +51,7 @@
     <div id="monthlySummary"></div>
     <div id="calendar"></div>
     <canvas id="categoryChart"></canvas>
+    <div id="list"></div>
 
 
     <!-- モーダル -->
@@ -73,12 +74,20 @@
     </div>
 
     <script>
+        // APIのベースURLをここで一括管理(以後この変数だけ使う)
+        const API_BASE = "https://kakeibo-y5uw.onrender.com";
+
         let chart;
 
-        function updateCategoryChart(data) {
+        function updateCategoryChart(data, year, month) {
             const categoryTotals = {};
 
             data.forEach(item => {
+                const d = new Date(item.date);
+                if (year !== undefined && month !== undefined) {
+                    if (d.getFullYear() !== year || d.getMonth() !== month) return;
+                }
+
                 if (item.category !== "収入") {
                     if (!categoryTotals[item.category]) {
                         categoryTotals[item.category] = 0;
@@ -89,8 +98,6 @@
 
             const labels = Object.keys(categoryTotals);
             const values = Object.values(categoryTotals);
-
-            console.log(labels, values);
 
             const ctx = document.getElementById('categoryChart').getContext('2d');
 
@@ -105,11 +112,14 @@
                     }]
                 }
             });
-        }        /* モーダルを開く */
+        }
+
+        /* モーダルを開く */
         function openInputModal(date) {
             document.getElementById("selectedDate").innerText = date;
             document.getElementById("inputModal").style.display = "block";
         }
+
         function updateMonthlySummary(data, year, month) {
             let income = 0;
             let expense = 0;
@@ -119,9 +129,9 @@
 
                 if (d.getFullYear() === year && d.getMonth() === month) {
                     if (item.category === "収入") {
-                        income += item.amount;
+                        income += Number(item.amount);
                     } else {
-                        expense += item.amount;
+                        expense += Number(item.amount);
                     }
                 }
             });
@@ -135,6 +145,7 @@
     <p>差額：${balance} 円</p>
   `;
         }
+
         /* モーダルから保存 */
         async function saveItem() {
             const data = {
@@ -144,7 +155,7 @@
                 memo: document.getElementById("modalMemo").value
             };
 
-            await fetch("http://https://kakeibo-y5uw.onrender.com.0.0.1:8000/add", {
+            await fetch(`${API_BASE}/add`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(data)
@@ -155,7 +166,7 @@
             calendar.refetchEvents();
         }
 
-        /* 上のフォームから追加 */
+        /* 上のフォームから追加(フォームがある場合用) */
         async function addItem() {
             const data = {
                 date: document.getElementById("date").value,
@@ -164,7 +175,7 @@
                 memo: document.getElementById("memoInput").value
             };
 
-            await fetch("http://https://kakeibo-y5uw.onrender.com.0.0.1:8000/add", {
+            await fetch(`${API_BASE}/add`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(data)
@@ -176,12 +187,12 @@
 
         /* 一覧読み込み */
         async function loadList() {
-            const res = await fetch("https://kakeibo-y5uw.onrender.com");
+            const res = await fetch(`${API_BASE}/list`);
             const json = await res.json();
 
-            // 👇ここに追加！
             const now = new Date();
             updateCategoryChart(json.data, now.getFullYear(), now.getMonth());
+            updateMonthlySummary(json.data, now.getFullYear(), now.getMonth());
 
             const listDiv = document.getElementById("list");
             listDiv.innerHTML = "";
@@ -190,6 +201,7 @@
                 listDiv.innerHTML += `<p>${item.date} / ${item.category} / ${item.amount}円 / ${item.memo}</p>`;
             });
         }
+
         /* カレンダー初期化 */
         let calendar;
 
@@ -199,7 +211,7 @@
             calendar = new FullCalendar.Calendar(calendarEl, {
                 initialView: 'dayGridMonth',
                 datesSet: async function (info) {
-                    const res = await fetch("https://kakeibo-y5uw.onrender.com");
+                    const res = await fetch(`${API_BASE}/list`);
                     const json = await res.json();
 
                     const currentDate = info.view.currentStart;
@@ -213,7 +225,7 @@
                     openInputModal(info.dateStr);
                 },
                 events: async function (info, successCallback) {
-                    const res = await fetch("https://kakeibo-y5uw.onrender.com");
+                    const res = await fetch(`${API_BASE}/list`);
                     const json = await res.json();
 
                     const events = json.data.map(item => ({
