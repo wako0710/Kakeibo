@@ -2,6 +2,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import sqlite3
+import os
+import uvicorn
 
 app = FastAPI()
 app.add_middleware(
@@ -12,11 +14,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
 @app.get("/")
 def read_root():
     return {"message": "家計簿アプリAPIへようこそ！"}
-
 
 # --- データベース接続 & テーブル作成 ---
 def init_db():
@@ -39,9 +39,6 @@ def init_db():
 
 # サーバー起動時に DB を初期化
 init_db()
-from pydantic import BaseModel
-import sqlite3
-
 
 # --- データモデル（受け取るデータの形） ---
 class KakeiboItem(BaseModel):
@@ -89,16 +86,6 @@ def get_list():
 
     return {"data": result}
 
-import os
-import uvicorn
-from fastapi import FastAPI
-
-app = FastAPI()
-
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     uvicorn.run("main:app", host="0.0.0.0", port=port)
-
-@app.get("/")
-def root():
-    return {"message": "FastAPI is running!"}
